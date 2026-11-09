@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lay-Up Off the Glass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: full-bleed arena; scoreboard-style title top-left, play-by-play caption above a transport bar at the bottom, spec sheet slides in from the right. Single dark arena look by design. */
+  :root {
+    --bg: #0a0d14;          /* arena dark */
+    --panel: rgba(13, 17, 27, 0.86);
+    --line: #283041;
+    --fg: #eef1f6;
+    --muted: #98a2b4;
+    --accent: #ff7a1f;      /* ball leather orange */
+    --paint: #4a77de;       /* key paint blue */
+    --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
+    --body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .brand { position: fixed; z-index: 5; top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+    pointer-events: none; display: grid; gap: 2px; max-width: min(520px, calc(100% - 180px)); }
+  .brand .eyebrow { font-family: var(--display); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 12px; color: var(--accent); }
+  .brand h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 34px; line-height: .95; letter-spacing: .01em; text-transform: uppercase; text-wrap: balance; }
+  .brand p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+  .tr { position: fixed; z-index: 6; top: calc(14px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: flex; gap: 8px; }
+  .chipbtn { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 13px; backdrop-filter: blur(6px); }
+  .chipbtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+  #specs { position: fixed; z-index: 7; top: calc(60px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: 330px;
+    max-height: calc(100% - 200px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(8px); }
+  #specs h2 { margin: 0 0 6px; font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  #specs h2 + dl { margin-top: 0; }
+  #specs dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0 0 14px; }
+  #specs dt { color: var(--muted); }
+  #specs dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  #specs .note { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; }
+
+  #caption { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; text-align: center;
+    padding: 6px 16px; border-radius: 6px; background: rgba(8,10,16,.55); pointer-events: none; max-width: calc(100% - 32px); text-wrap: balance; transition: opacity .25s; }
+  #caption small { display: block; font-family: var(--body); font-weight: 500; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+  #stats { position: fixed; z-index: 5; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    display: grid; grid-template-columns: auto auto; gap: 2px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 12px; }
+  #stats span:nth-child(odd) { color: var(--muted); }
+  #stats span:nth-child(even) { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  #bar { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+    padding-block: 10px calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: linear-gradient(to top, rgba(6,8,13,.94), rgba(6,8,13,.72)); border-top: 1px solid var(--line); }
+  .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: #1a0c02; display: grid; place-items: center; flex: none; }
+  .play svg { width: 20px; height: 20px; fill: currentColor; }
+  .tl { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; }
+  #scrub { flex: 1; min-width: 0; accent-color: var(--accent); }
+  #clock { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 64px; text-align: right; }
+  .group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .group .lbl { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-right: 2px; }
+  .seg { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 12.5px; font-weight: 600; }
+  .seg[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+  #labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+  .tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 11.5px; font-weight: 600;
+    background: rgba(8,10,16,.78); border: 1px solid rgba(255,255,255,.22); border-radius: 4px; padding: 2px 7px; }
+  .tag::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 10px; background: rgba(255,255,255,.55); }
+  .tag i { font-style: normal; color: var(--muted); font-weight: 500; }
+
+  @media (max-width: 720px) {
+    .brand h1 { font-size: 26px; }
+    .brand p { display: none; }
+    #caption { font-size: 17px; bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+    #stats { display: none; }
+    #specs { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: auto; top: auto;
+      bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-height: 46%; }
+    .tag { font-size: 10.5px; }
+  }
+  @media (prefers-reduced-motion: reduce) { #caption { transition: none; } }
+</style>
+
+<div id="stage"></div>
+<div id="labels" hidden></div>
+
+<header class="brand">
+  <span class="eyebrow">WNBA half court · regulation goal</span>
+  <h1>Lay-Up Off the Glass</h1>
+  <p>A 5′9″ guard drives from the right wing, takes the 1-2 step and banks a right-hand lay-up off the top corner of the square.</p>
+</header>
+
+<div class="tr">
+  <button class="chipbtn" id="btnCam" aria-pressed="false" title="Switch between the cinematic camera and a free orbit camera">Free camera</button>
+  <button class="chipbtn" id="btnSpecs" aria-pressed="false">Specs</button>
+</div>
+
+<aside id="specs" hidden aria-label="Specifications">
+  <h2>Court · WNBA (same as NBA)</h2>
+  <dl>
+    <dt>Full court</dt><dd>94 × 50 ft</dd>
+    <dt>Rim height</dt><dd>10 ft · 3.05 m</dd>
+    <dt>Rim inside diameter</dt><dd>18 in</dd>
+    <dt>Backboard</dt><dd>72 × 42 in</dd>
+    <dt>Target square</dt><dd>24 × 18 in</dd>
+    <dt>Backboard face to baseline</dt><dd>4 ft</dd>
+    <dt>Lane width</dt><dd>16 ft</dd>
+    <dt>Free-throw line to backboard</dt><dd>15 ft</dd>
+    <dt>Free-throw / center circle</dt><dd>6 ft radius</dd>
+    <dt>Restricted area</dt><dd>4 ft radius</dd>
+    <dt>Three-point arc</dt><dd>22 ft 1¾ in</dd>
+    <dt>Corner three</dt><dd>22 ft</dd>
+    <dt>Line width</dt><dd>2 in</dd>
+    <dt>Ball</dt><dd>Size 6 · 28.5 in</dd>
+  </dl>
+  <h2>The lay-up</h2>
+  <dl id="specMove"></dl>
+  <p class="note">Body proportions follow standard anthropometric ratios for a 1.75 m athlete. The jump is a ballistic flight from a left-foot take-off; the ball leaves the hand on its own physics, banks off the glass (restitution 0.6) and drops through the net.</p>
+</aside>
+
+<div id="caption" aria-live="polite"></div>
+<div id="stats" aria-hidden="true">
+  <span>Ball height</span><span id="stBall">–</span>
+  <span>Hip rise</span><span id="stHip">–</span>
+  <span>Clock</span><span id="stTime">–</span>
+</div>
+
+<footer id="bar">
+  <button class="play" id="btnPlay" aria-label="Pause"><svg viewBox="0 0 24 24" id="icoPlay"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
+  <div class="tl">
+    <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Timeline">
+    <span id="clock">0.00 s</span>
+  </div>
+  <div class="group" role="group" aria-label="Speed">
+    <span class="lbl">Speed</span>
+    <button class="seg" data-speed="1" aria-pressed="true">1×</button>
+    <button class="seg" data-speed="0.5" aria-pressed="false">½×</button>
+    <button class="seg" data-speed="0.25" aria-pressed="false">¼×</button>
+  </div>
+  <div class="group" role="group" aria-label="Display">
+    <button class="seg" id="tgSlow" aria-pressed="true" title="Slow motion through the jump">Slow-mo jump</button>
+    <button class="seg" id="tgPath" aria-pressed="true">Ball path</button>
+    <button class="seg" id="tgLabels" aria-pressed="false">Label markings</button>
+  </div>
+</footer>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ---------------------------------------------------------------- units & helpers
+const FT = 0.3048, IN = 0.0254, G = 9.81, D2R = Math.PI / 180;
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const UP = V(0, 1, 0), AX_X = V(1, 0, 0), AX_Z = V(0, 0, 1);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const smoother = t => { t = clamp(t, 0, 1); return t * t * t * (t * (t * 6 - 15) + 10); };
+let _seed = 20261105;
+const rnd = () => { _seed = (_seed * 16807) % 2147483647; return (_seed - 1) / 2147483646; };
+const rotY = (v, a) => V(v.x * Math.cos(a) + v.z * Math.sin(a), v.y, -v.x * Math.sin(a) + v.z * Math.cos(a));
+const leftOf = F => V().crossVectors(UP, F).normalize();      // +X when facing +Z
+const rightOf = F => V().crossVectors(F, UP).normalize();
+function smin(a, b, k) { const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1); return lerp(b, a, h) - k * h * (1 - h); }
+
+// Hermite track: keys [{t, v:number|array, d?:number|array}] (Catmull-Rom tangents when d is omitted, flat at the ends)
+function H(keys) {
+  const K = keys.map(k => ({ t: k.t, v: [].concat(k.v), d: k.d !== undefined ? [].concat(k.d) : null }));
+  const n = K.length, dim = K[0].v.length;
+  for (let i = 0; i < n; i++) if (!K[i].d) {
+    if (i === 0 || i === n - 1) K[i].d = new Array(dim).fill(0);
+    else { const a = K[i - 1], b = K[i + 1]; K[i].d = K[i].v.map((_, j) => (b.v[j] - a.v[j]) / (b.t - a.t)); }
+  }
+  return t => {
+    if (t <= K[0].t) return K[0].v.slice();
+    if (t >= K[n - 1].t) return K[n - 1].v.slice();
+    let i = 0; while (i < n - 2 && t > K[i + 1].t) i++;
+    const A = K[i], B = K[i + 1], h = B.t - A.t, s = (t - A.t) / h, s2 = s * s, s3 = s2 * s;
+    const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+    return A.v.map((p0, j) => h00 * p0 + h10 * h * A.d[j] + h01 * B.v[j] + h11 * h * B.d[j]);
+  };
+}
+const H1 = keys => { const f = H(keys); return t => f(t)[0]; };
+function hermiteV(p0, v0, p1, v1, t0, t1, t) {
+  const h = t1 - t0, s = clamp((t - t0) / h, 0, 1), s2 = s * s, s3 = s2 * s;
+  const a = 2 * s3 - 3 * s2 + 1, b = s3 - 2 * s2 + s, c = -2 * s3 + 3 * s2, d = s3 - s2;
+  return V().addScaledVector(p0, a).addScaledVector(v0, b * h).addScaledVector(p1, c).addScaledVector(v1, d * h);
+}
+
+// ---------------------------------------------------------------- regulation dimensions (metres)
+const CT = {
+  halfW: 25 * FT, halfL: 47 * FT, line: 2 * IN,
+  basketZ: 5.25 * FT, rimY: 10 * FT, rimR: 9 * IN, rod: (5 / 16) * IN,
+  boardZ: 4 * FT, boardW: 6 * FT, boardH: 3.5 * FT, boardBottom: 9.5 * FT, glassT: 0.5 * IN,
+  laneHalf: 8 * FT, ftZ: 19 * FT, ftR: 6 * FT, raR: 4 * FT,
+  three: 22 * FT + 1.75 * IN, corner: 22 * FT, ccR: 6 * FT, hashZ: 28 * FT,
+};
+const BALL_R = 28.5 * IN / (2 * Math.PI);               // WNBA size 6
+const FLOOR_END = CT.halfL + 3.4;
+const RIM_C = V(0, CT.rimY - CT.rod, CT.basketZ);
+
+// Body (5'9" = 1.753 m, Drillis–Contini segment ratios)
+const HEIGHT = 69 * IN;
+const LEG = { thigh: 0.43, shin: 0.43, ankleH: 0.068, hipHalf: 0.085 };
+const ARM = { upper: 0.31, fore: 0.255, shHalf: 0.17 };
+const SPINE = 0.50, NECK_UP = 0.05, HEAD_UP = 0.20;
+
+// ---------------------------------------------------------------- renderer / scene
+const params = new URLSearchParams(location.search);
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: params.has('capture') });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const ANISO = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d14);
+scene.fog = new THREE.Fog(0x0a0d14, 24, 60);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.5;
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.05, 200);
+camera.position.set(6, 5, 12);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.target.set(0.3, 1.4, 3.2);
+controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 1.2; controls.maxDistance = 40;
+controls.enabled = false;
+
+scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3b2a1c, 0.75));
+const key = new THREE.DirectionalLight(0xfff1df, 2.3);
+key.position.set(4.5, 16, 9); key.target.position.set(0.5, 0, 3.5);
+key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -9, right: 9, top: 11, bottom: -6, near: 2, far: 40 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+scene.add(key, key.target);
+const fill = new THREE.DirectionalLight(0xcfdcff, 0.55); fill.position.set(-9, 9, 14); scene.add(fill);
+const rimLight = new THREE.DirectionalLight(0xffe2c4, 0.5); rimLight.position.set(-2, 6, -8); scene.add(rimLight);
+for (const [x, z] of [[0, 3], [-5.5, 9], [5.5, 9], [0, 13]]) {
+  const s = new THREE.SpotLight(0xfff0dc, 40, 34, 0.6, 0.8, 1.2);
+  s.position.set(x, 13, z); s.target.position.set(x, 0, z); scene.add(s, s.target);
+}
+
+// ---------------------------------------------------------------- textures
+function woodTexture() {
+  const S = 2048, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d');
+  const planks = 35, pw = S / planks;                   // 2.25 in maple strips on a 2 m tile
+  for (let i = 0; i < planks; i++) {
+    let y = -rnd() * S * 0.6;
+    while (y < S) {
+      const len = (0.35 + rnd() * 0.6) * S;
+      const l = 64 + rnd() * 9 - 4;
+      x.fillStyle = `hsl(${31 + rnd() * 6}, ${50 + rnd() * 14}%, ${l}%)`;
+      x.fillRect(i * pw, y, pw, len);
+      for (let k = 0; k < 16; k++) {
+        const gx = i * pw + rnd() * pw, wav = 90 + rnd() * 80, ph = rnd() * 6;
+        x.strokeStyle = `rgba(${110 + rnd() * 30},${62 + rnd() * 20},26,${0.05 + rnd() * 0.09})`;
+        x.lineWidth = 0.6 + rnd() * 1.8; x.beginPath(); x.moveTo(gx, y);
+        for (let s = 0; s <= len; s += 32) x.lineTo(gx + Math.sin(s / wav + ph) * 2.2, y + s);
+        x.stroke();
+      }
+      x.fillStyle = 'rgba(70,40,15,0.35)'; x.fillRect(i * pw, y, pw, 2);
+      y += len;
+    }
+    x.fillStyle = 'rgba(70,40,15,0.30)'; x.fillRect(i * pw, 0, 1.6, S);
+  }
+  for (let i = 0; i < 26000; i++) { x.fillStyle = `rgba(80,45,15,${rnd() * 0.12})`; x.fillRect(rnd() * S, rnd() * S, 1, 1 + rnd() * 3); }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
+  return t;
+}
+function ballTexture() {
+  const W = 1024, Hh = 512, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+  const x = c.getContext('2d'), img = x.createImageData(W, Hh), d = img.data;
+  const bc = document.createElement('canvas'); bc.width = W; bc.height = Hh;
+  const bx = bc.getContext('2d'), bimg = bx.createImageData(W, Hh), bd = bimg.data;
+  for (let j = 0; j < Hh; j++) {
+    const th = (j + 0.5) / Hh * Math.PI;
+    for (let i = 0; i < W; i++) {
+      const ph = (i + 0.5) / W * Math.PI * 2;
+      const px = -Math.cos(ph) * Math.sin(th), py = Math.cos(th), pz = Math.sin(ph) * Math.sin(th);
+      const w = 0.022;
+      const seam = Math.min(Math.abs(py), Math.abs(px), Math.abs(Math.abs(px) - 0.64) * 1.1) < w;
+      const pebble = (Math.sin(i * 1.7) * Math.sin(j * 2.3) + rnd() * 0.9) * 0.5;
+      const k = (j * W + i) * 4;
+      if (seam) { d[k] = 26; d[k + 1] = 18; d[k + 2] = 14; bd[k] = bd[k + 1] = bd[k + 2] = 40; }
+      else {
+        const v = 1 + pebble * 0.08;
+        d[k] = clamp(206 * v, 0, 255); d[k + 1] = clamp(92 * v, 0, 255); d[k + 2] = clamp(38 * v, 0, 255);
+        const b = 150 + pebble * 90; bd[k] = bd[k + 1] = bd[k + 2] = b;
+      }
+      d[k + 3] = bd[k + 3] = 255;
+    }
+  }
+  x.putImageData(img, 0, 0); bx.putImageData(bimg, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
+  return { map: t, bump: new THREE.CanvasTexture(bc) };
+}
+function jerseyTexture() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1d4fc2'; x.fillRect(0, 0, 1024, 512);
+  x.fillStyle = '#f2f5fb';
+  x.fillRect(0, 0, 16, 512); x.fillRect(1008, 0, 16, 512); x.fillRect(496, 0, 32, 512); // side piping
+  x.fillRect(0, 0, 1024, 16);                                                              // neckline trim
+  x.fillStyle = '#ff7a1f'; x.fillRect(0, 16, 1024, 6);
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  const num = (n, cx, cy, size) => {
+    x.font = `900 ${size}px "Arial Black", Impact, Arial, sans-serif`;
+    x.lineWidth = size * 0.08; x.strokeStyle = '#ff7a1f'; x.strokeText(n, cx, cy);
+    x.fillStyle = '#ffffff'; x.fillText(n, cx, cy);
+  };
+  num('9', 256, 290, 250);
+  x.font = '800 54px "Arial Black", Impact, Arial, sans-serif'; x.fillStyle = '#ffffff'; x.fillText('MAPLES', 768, 165);
+  num('9', 768, 300, 140);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
+  return t;
+}
+function textTexture(lines, w, h, bg, fg, font) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, w, h);
+  x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = font;
+  lines.forEach((l, i) => x.fillText(l, w / 2, h * (i + 0.5) / lines.length));
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+// ---------------------------------------------------------------- court
+const wood = woodTexture();
+const MAT = {
+  floor: new THREE.MeshPhysicalMaterial({ map: wood, roughness: 0.4, clearcoat: 0.75, clearcoatRoughness: 0.14 }),
+  apron: new THREE.MeshPhysicalMaterial({ map: wood, color: 0xa66b42, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.16 }),
+  paint: new THREE.MeshPhysicalMaterial({ map: wood, color: 0x3560c4, roughness: 0.45, clearcoat: 0.7, clearcoatRoughness: 0.15,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide }),
+  line: new THREE.MeshPhysicalMaterial({ color: 0xf8f8f3, roughness: 0.5, clearcoat: 0.6, clearcoatRoughness: 0.2,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }),
+};
+function floorRect(x0, z0, x1, z1, y, mat) {
+  const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0); g.rotateX(-Math.PI / 2); g.translate((x0 + x1) / 2, y, (z0 + z1) / 2);
+  const p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 2, p.getZ(i) / 2);
+  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); return m;
+}
+function shapeBuilder() {
+  const pos = [], idx = [];
+  const quad = (a, b, c, d) => { const n = pos.length / 3; for (const p of [a, b, c, d]) pos.push(p[0], 0, p[1]); idx.push(n, n + 2, n + 1, n, n + 3, n + 2); };
+  return {
+    rect(x0, z0, x1, z1) { quad([x0, z0], [x1, z0], [x1, z1], [x0, z1]); },
+    arc(cx, cz, r0, r1, a0, a1, seg = 48) {
+      for (let i = 0; i < seg; i++) {
+        const ta = lerp(a0, a1, i / seg), tb = lerp(a0, a1, (i + 1) / seg);
+        quad([cx + r0 * Math.cos(ta), cz + r0 * Math.sin(ta)], [cx + r1 * Math.cos(ta), cz + r1 * Math.sin(ta)],
+             [cx + r1 * Math.cos(tb), cz + r1 * Math.sin(tb)], [cx + r0 * Math.cos(tb), cz + r0 * Math.sin(tb)]);
+      }
+    },
+    build(y, mat) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      const uv = [], nrm = [];
+      for (let i = 0; i < pos.length; i += 3) { uv.push(pos[i] / 2, pos[i + 2] / 2); nrm.push(0, 1, 0); }
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+      g.setIndex(idx); g.translate(0, y, 0);
+      const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); return m;
+    },
+  };
+}
+function buildCourt() {
+  const hw = CT.halfW, L = CT.line, lh = CT.laneHalf;
+  floorRect(-hw, 0, hw, FLOOR_END, 0, MAT.floor);
+  floorRect(-hw - 2.6, -3.4, hw + 2.6, 0, 0, MAT.apron);
+  floorRect(hw, 0, hw + 2.6, FLOOR_END, 0, MAT.apron);
+  floorRect(-hw - 2.6, 0, -hw, FLOOR_END, 0, MAT.apron);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), new THREE.MeshStandardMaterial({ color: 0x14171e, roughness: 0.9 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.01, 6); ground.receiveShadow = true; scene.add(ground);
+
+  const paint = shapeBuilder();
+  paint.rect(-lh + L, 0, lh - L, CT.ftZ - L);
+  paint.arc(0, CT.halfL, 0, CT.ccR - L, 0, Math.PI * 2, 96);
+  paint.build(0.0008, MAT.paint);
+
+  const s = shapeBuilder();
+  s.rect(-hw - L, -L, hw + L, 0);                                   // baseline (out of bounds side)
+  s.rect(hw, -L, hw + L, FLOOR_END); s.rect(-hw - L, -L, -hw, FLOOR_END);   // sidelines
+  s.rect(-hw, CT.halfL - L / 2, hw, CT.halfL + L / 2);              // half-court line
+  s.arc(0, CT.halfL, CT.ccR - L, CT.ccR, 0, Math.PI * 2, 128);       // center circle 6 ft
+  s.arc(0, CT.halfL, 2 * FT - L, 2 * FT, 0, Math.PI * 2, 64);        // inner circle 2 ft
+  s.rect(lh - L, 0, lh, CT.ftZ); s.rect(-lh, 0, -lh + L, CT.ftZ);   // lane lines (16 ft outside)
+  s.rect(-lh, CT.ftZ - L, lh, CT.ftZ);                              // free-throw line, 15 ft from board
+  const fc = CT.ftZ - L / 2;
+  s.arc(0, fc, CT.ftR - L, CT.ftR, 0, Math.PI, 72);                 // FT circle, solid half
+  const nD = 8, u = Math.PI / (2 * nD);
+  for (let i = 0; i < nD; i++) { const a0 = Math.PI + (2 * i + 0.5) * u; s.arc(0, fc, CT.ftR - L, CT.ftR, a0, a0 + u, 8); } // dashed half
+  s.arc(0, CT.basketZ, CT.raR, CT.raR + L, 0, Math.PI, 56);         // restricted area 4 ft
+  s.rect(CT.raR, CT.boardZ, CT.raR + L, CT.basketZ); s.rect(-CT.raR - L, CT.boardZ, -CT.raR, CT.basketZ);
+  for (const sg of [-1, 1]) {                                        // lane-space marks
+    const R = (x0, x1, z0, z1) => s.rect(Math.min(sg * x0, sg * x1), z0, Math.max(sg * x0, sg * x1), z1);
+    R(lh, lh + 8 * IN, 7 * FT, 8 * FT);                              // block (neutral zone)
+    for (const z of [11 * FT, 14 * FT, 17 * FT]) R(lh, lh + 6 * IN, z, z + L);
+    R(hw - 3 * FT, hw, CT.hashZ, CT.hashZ + L);                     // 28 ft sideline hash
+  }
+  const R3 = CT.three, cx = CT.corner, th0 = Math.acos(cx / R3), zJ = CT.basketZ + R3 * Math.sin(th0);
+  s.rect(cx - L, 0, cx, zJ); s.rect(-cx, 0, -cx + L, zJ);
+  s.arc(0, CT.basketZ, R3 - L, R3, th0, Math.PI - th0, 160);
+  s.build(0.0016, MAT.line);
+
+  // court-side text on the baseline apron
+  const tx = textTexture(['MAPLES'], 1024, 160, 'rgba(0,0,0,0)', 'rgba(255,255,255,0.92)', '800 120px "Arial Black", Impact, Arial, sans-serif');
+  const tm = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.66), new THREE.MeshStandardMaterial({ map: tx, transparent: true, roughness: 0.5,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  tm.rotation.x = -Math.PI / 2; tm.position.set(-4.4, 0.0015, -0.9); tm.receiveShadow = true; scene.add(tm);
+  return { zJoin: zJ };
+}
+const courtInfo = buildCourt();
+
+// ---------------------------------------------------------------- goal: backboard, rim, net, stanchion
+const goal = {};
+function buildGoal() {
+  const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x5b616c, metalness: 0.8, roughness: 0.35 });
+  const pad = new THREE.MeshPhysicalMaterial({ color: 0x173a8c, roughness: 0.85, sheen: 0.4, sheenColor: 0x7aa0ff });
+  const orange = new THREE.MeshStandardMaterial({ color: 0xff4f12, metalness: 0.35, roughness: 0.32 });
+  const bz = CT.boardZ, bw = CT.boardW, bh = CT.boardH, by = CT.boardBottom, gt = CT.glassT;
+
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, gt),
+    new THREE.MeshPhysicalMaterial({ color: 0xd8ecf5, roughness: 0.03, metalness: 0, transparent: true, opacity: 0.18, clearcoat: 1, depthWrite: false }));
+  glass.position.set(0, by + bh / 2, bz - gt / 2); scene.add(glass);
+  // painted border (2 in) + target square 24 x 18 in, top of its bottom line level with the rim
+  const L = 2 * IN, zf = bz + 0.0012, marks = [];
+  const vr = (x0, y0, x1, y1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), white); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, zf); scene.add(m); marks.push(m); };
+  vr(-bw / 2, by, bw / 2, by + L); vr(-bw / 2, by + bh - L, bw / 2, by + bh); vr(-bw / 2, by, -bw / 2 + L, by + bh); vr(bw / 2 - L, by, bw / 2, by + bh);
+  const sw = 24 * IN, sh = 18 * IN, sy = CT.rimY - L;
+  vr(-sw / 2, sy, sw / 2, sy + L); vr(-sw / 2, sy + sh - L, sw / 2, sy + sh); vr(-sw / 2, sy, -sw / 2 + L, sy + sh); vr(sw / 2 - L, sy, sw / 2, sy + sh);
+  // steel frame behind glass
+  const fz = bz - gt - 0.02;
+  const fb = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.035), steel); m.position.set(x, y, fz); m.castShadow = true; scene.add(m); };
+  fb(bw, 0.05, 0, by + 0.025); fb(bw, 0.05, 0, by + bh - 0.025); fb(0.05, bh, -bw / 2 + 0.025, by + bh / 2); fb(0.05, bh, bw / 2 - 0.025, by + bh / 2);
+  fb(0.06, bh * 0.8, 0, by + bh * 0.45); fb(0.5, 0.4, 0, CT.rimY - 0.05);
+  // padding: bottom edge and lower sides
+  const pb = new THREE.Mesh(new RoundedBoxGeometry(bw + 0.06, 0.07, 0.09, 3, 0.025), pad);
+  pb.position.set(0, by - 0.035, bz - 0.03); pb.castShadow = true; scene.add(pb);
+  for (const sg of [-1, 1]) { const ps = new THREE.Mesh(new RoundedBoxGeometry(0.07, 0.42, 0.09, 3, 0.025), pad); ps.position.set(sg * (bw / 2 + 0.005), by + 0.17, bz - 0.03); ps.castShadow = true; scene.add(ps); }
+  // shot clock
+  const sc = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.26, 0.14), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.6 }));
+  sc.position.set(0, by + bh + 0.15, bz - 0.06); scene.add(sc);
+  const scd = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.2), new THREE.MeshBasicMaterial({ map: textTexture(['24'], 256, 96, '#111', '#ff3b2f', '800 84px "Arial Black", Impact, sans-serif'), toneMapped: false }));
+  scd.position.set(0, by + bh + 0.15, bz + 0.012); scene.add(scd);
+
+  // ring: 18 in inside diameter, 5/8 in rod, orange powder coat
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(CT.rimR + CT.rod, CT.rod, 14, 96), orange);
+  ring.rotation.x = Math.PI / 2; ring.position.copy(RIM_C); ring.castShadow = true; scene.add(ring);
+  const ringBack = CT.basketZ - CT.rimR - CT.rod;
+  const flange = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, ringBack - bz + 0.01), orange);
+  flange.position.set(0, CT.rimY - 0.012, (bz + ringBack) / 2); flange.castShadow = true; scene.add(flange);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.17, 0.014), orange); plate.position.set(0, CT.rimY - 0.07, bz + 0.007); scene.add(plate);
+  for (const sg of [-1, 1]) {
+    const a = V(sg * 0.07, CT.rimY - 0.15, bz + 0.012), b = V(sg * 0.035, CT.rimY - 0.015, ringBack + 0.01);
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, a.distanceTo(b), 8), orange);
+    br.position.copy(a).add(b).multiplyScalar(0.5); br.quaternion.setFromUnitVectors(UP, b.clone().sub(a).normalize()); scene.add(br);
+  }
+  for (let j = 0; j < 12; j++) {                                    // net hooks
+    const a = (j / 12) * Math.PI * 2, r = CT.rimR + 0.002;
+    const h = new THREE.Mesh(new THREE.TorusGeometry(0.008, 0.0022, 6, 12, Math.PI), orange);
+    h.position.set(Math.cos(a) * r, CT.rimY - 2 * CT.rod - 0.006, CT.basketZ + Math.sin(a) * r);
+    h.rotation.set(Math.PI, -a + Math.PI / 2, 0); scene.add(h);
+  }
+
+  // portable stanchion behind the baseline
+  const armY = by + 0.55, poleZ = -1.35;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, bz - poleZ - 0.05), steel);
+  arm.position.set(0, armY, (bz + poleZ) / 2 - 0.03); arm.castShadow = true; scene.add(arm);
+  const brA = V(0, 1.4, poleZ), brB = V(0, armY - 0.12, bz - 0.55);
+  const brace = new THREE.Mesh(new THREE.BoxGeometry(0.12, brA.distanceTo(brB), 0.12), steel);
+  brace.position.copy(brA).add(brB).multiplyScalar(0.5); brace.quaternion.setFromUnitVectors(UP, brB.clone().sub(brA).normalize()); brace.castShadow = true; scene.add(brace);
+  const pole = new THREE.Mesh(new RoundedBoxGeometry(0.34, armY + 0.12, 0.34, 3, 0.05), pad);
+  pole.position.set(0, (armY + 0.12) / 2, poleZ); pole.castShadow = true; scene.add(pole);
+  const base = new THREE.Mesh(new RoundedBoxGeometry(1.7, 0.95, 2.3, 4, 0.12), pad);
+  base.position.set(0, 0.475, poleZ - 0.95); base.castShadow = true; base.receiveShadow = true; scene.add(base);
+  const baseFront = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.36), new THREE.MeshStandardMaterial({ map: textTexture(['MAPLES'], 512, 150, '#173a8c', '#ffffff', '800 92px "Arial Black", Impact, sans-serif'), roughness: 0.8 }));
+  baseFront.position.set(0, 0.52, poleZ - 0.95 + 1.151); scene.add(baseFront);
+  goal.glass = glass;
+}
+buildGoal();
+
+// arena stands (dim, fogged)
+(function buildStands() {
+  const seatGeo = new THREE.BoxGeometry(0.46, 0.42, 0.42);
+  const seatMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+  const blocks = [
+    { ox: -13, oz: -8.0, dx: 1, dz: 0, nx: 52, rows: 12, face: 0, rise: [0, 0.38, -0.8] },
+    { ox: 13.6, oz: -4, dx: 0, dz: 1, nx: 48, rows: 12, face: -Math.PI / 2, rise: [0.8, 0.38, 0] },
+    { ox: -13.6, oz: -4, dx: 0, dz: 1, nx: 48, rows: 12, face: Math.PI / 2, rise: [-0.8, 0.38, 0] },
+  ];
+  let count = 0; for (const b of blocks) count += b.nx * b.rows;
+  const inst = new THREE.InstancedMesh(seatGeo, seatMat, count);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color();
+  let k = 0;
+  const stepMat = new THREE.MeshStandardMaterial({ color: 0x1b1f28, roughness: 0.9 });
+  for (const b of blocks) {
+    for (let r = 0; r < b.rows; r++) {
+      for (let i = 0; i < b.nx; i++) {
+        const along = i * 0.5;
+        const p = V(b.ox + b.dx * along + b.rise[0] * r, 0.4 + b.rise[1] * r + 0.21, b.oz + b.dz * along + b.rise[2] * r);
+        q.setFromAxisAngle(UP, b.face); m.compose(p, q, V(1, 1, 1)); inst.setMatrixAt(k, m);
+        col.setHSL(rnd() < 0.5 ? 0.6 : 0.02, 0.35, 0.07 + rnd() * 0.04); inst.setColorAt(k, col); k++;
+      }
+      const len = b.nx * 0.5, st = new THREE.Mesh(new THREE.BoxGeometry(b.dx ? len : 0.8, 0.4 + b.rise[1] * r, b.dz ? len : 0.8), stepMat);
+      st.position.set(b.ox + b.dx * len / 2 + b.rise[0] * r, (0.4 + b.rise[1] * r) / 2, b.oz + b.dz * len / 2 + b.rise[2] * r); scene.add(st);
+    }
+  }
+  scene.add(inst);
+})();
+
+// ---------------------------------------------------------------- shot solution (work backwards from the glass)
+const B_PT = V(0.28, 3.38, CT.boardZ + BALL_R);          // contact: top-right corner of the square
+const C_PT = V(0.03, 3.12, CT.basketZ - 0.02);           // just above the rim centre, falling
+const T2 = 0.30, E_GLASS = 0.6, FR_X = 0.9, FR_Y = 0.8;
+const vAfter = V((C_PT.x - B_PT.x) / T2, (C_PT.y - B_PT.y + 0.5 * G * T2 * T2) / T2, (C_PT.z - B_PT.z) / T2);
+const vBefore = V(vAfter.x / FR_X, vAfter.y / FR_Y, -vAfter.z / E_GLASS);
+const d = V(vBefore.x, 0, vBefore.z).normalize();        // run / jump direction = ball's line to the glass
+const LVEC = leftOf(d), RVEC = rightOf(d);
+
+const T_TO = 3.28, Y_TO = 0.98, RISE = 0.45;
+const VY = Math.sqrt(2 * G * RISE), T_PEAK = VY / G, T_R = T_TO + T_PEAK, VH = 1.15;
+const LEAN_R = 6 * D2R, ROLL_R = -10 * D2R;
+function bodyQuat(F, lean, roll) {
+  const m = new THREE.Matrix4().makeBasis(leftOf(F), UP, F);
+  const q = new THREE.Quaternion().setFromRotationMatrix(m);
+  return q.multiply(new THREE.Quaternion().setFromAxisAngle(AX_X, lean)).multiply(new THREE.Quaternion().setFromAxisAngle(AX_Z, roll));
+}
+const SH_R_LOCAL = V(-ARM.shHalf, SPINE, -0.01), SH_L_LOCAL = V(ARM.shHalf, SPINE, -0.01);
+const qRel = bodyQuat(d, LEAN_R, ROLL_R);
+const S_R = SH_R_LOCAL.clone().applyQuaternion(qRel);
+const aDir = V().addScaledVector(UP, Math.cos(22 * D2R)).addScaledVector(d, Math.sin(22 * D2R)).addScaledVector(RVEC, 0.07).normalize();
+const REACH = 0.97 * (ARM.upper + ARM.fore), GRIP = BALL_R + 0.085, LR = REACH + GRIP;
+const yRelease = Y_TO + RISE + S_R.y + aDir.y * LR;
+const TAU = (-vBefore.y + Math.sqrt(vBefore.y ** 2 + 2 * G * (B_PT.y - yRelease))) / G;
+const P0 = V(B_PT.x - vBefore.x * TAU, yRelease, B_PT.z - vBefore.z * TAU);
+const V0 = V(vBefore.x, vBefore.y + G * TAU, vBefore.z);
+const PELVIS_R = P0.clone().addScaledVector(aDir, -LR).sub(S_R);
+const U_R = 0.15 + VH * T_PEAK;
+const ORIGIN = V(PELVIS_R.x, 0, PELVIS_R.z).addScaledVector(d, -U_R);
+const W = (u, v, y = 0) => V(ORIGIN.x + d.x * u + LVEC.x * v, y, ORIGIN.z + d.z * u + LVEC.z * v);
+const Y_LAND = 0.91;
+const TAU_L = (VY + Math.sqrt(VY * VY + 2 * G * (Y_TO - Y_LAND))) / G;
+const T_LAND = T_TO + TAU_L, U_LAND = 0.15 + VH * TAU_L, VY_LAND = VY - G * TAU_L;
+const T_END = 7.4;
+
+// ---------------------------------------------------------------- motion tracks (approach frame: u forward along d, v to the left)
+const pkA = H([
+  { t: 0, v: [-5.70, 0] }, { t: 0.6, v: [-5.69, -0.012] }, { t: 1.1, v: [-5.71, 0] },
+  { t: 1.25, v: [-5.66, 0], d: [0.8, 0] },
+  { t: 1.65, v: [-4.90, 0.03] }, { t: 2.02, v: [-3.80, -0.03] }, { t: 2.39, v: [-2.50, 0.03] },
+  { t: 2.79, v: [-1.10, -0.02] }, { t: 3.06, v: [-0.33, 0.01], d: [2.6, 0] },
+  { t: T_TO, v: [0.15, 0], d: [VH, 0] },
+]);
+const pyA = H1([
+  { t: 0, v: 0.845 }, { t: 0.30, v: 0.832 }, { t: 0.55, v: 0.845 }, { t: 0.90, v: 0.832 }, { t: 1.12, v: 0.845 },
+  { t: 1.25, v: 0.83 }, { t: 1.45, v: 0.85 }, { t: 1.55, v: 0.85 }, { t: 1.65, v: 0.83 }, { t: 1.84, v: 0.875 },
+  { t: 1.92, v: 0.86 }, { t: 2.02, v: 0.83 }, { t: 2.20, v: 0.88 }, { t: 2.29, v: 0.86 }, { t: 2.39, v: 0.83 },
+  { t: 2.58, v: 0.875 }, { t: 2.68, v: 0.845 }, { t: 2.79, v: 0.80 }, { t: 2.98, v: 0.84 },
+  { t: 3.06, v: 0.82, d: -0.1 }, { t: 3.17, v: 0.80, d: 0.4 }, { t: T_TO, v: Y_TO, d: VY },
+]);
+const pkB = H([
+  { t: T_LAND, v: [U_LAND, 0], d: [VH, 0] }, { t: T_LAND + 0.2, v: [U_LAND + 0.13, -0.02] },
+  { t: 4.75, v: [U_LAND + 0.22, -0.28] }, { t: 5.15, v: [U_LAND + 0.24, -0.32] }, { t: 5.6, v: [U_LAND + 0.20, -0.34] }, { t: T_END, v: [U_LAND + 0.20, -0.34] },
+]);
+const pyB = H1([
+  { t: T_LAND, v: Y_LAND, d: VY_LAND }, { t: T_LAND + 0.19, v: 0.74, d: 0 }, { t: 4.6, v: 0.86 }, { t: 4.85, v: 0.875 },
+  { t: 5.2, v: 0.90 }, { t: 5.7, v: 0.912 }, { t: T_END, v: 0.912 },
+]);
+const yawT = H1([{ t: 0, v: 0 }, { t: 4.45, v: 0 }, { t: 5.0, v: 0.55 }, { t: 5.6, v: 1.15 }, { t: T_END, v: 1.15 }]);
+const leanT = H1([
+  { t: 0, v: 0.33 }, { t: 1.2, v: 0.33 }, { t: 1.35, v: 0.38 }, { t: 1.7, v: 0.30 }, { t: 2.4, v: 0.25 }, { t: 2.68, v: 0.27 },
+  { t: 2.95, v: 0.22 }, { t: 3.06, v: 0.15 }, { t: T_TO, v: 0.07 }, { t: T_R, v: LEAN_R }, { t: 3.82, v: 0.12 },
+  { t: T_LAND + 0.05, v: 0.22 }, { t: T_LAND + 0.2, v: 0.45 }, { t: 4.6, v: 0.2 }, { t: 5.2, v: 0.1 }, { t: T_END, v: 0.08 },
+]);
+const rollT = H1([{ t: 0, v: 0 }, { t: 3.15, v: 0 }, { t: 3.4, v: -0.06 }, { t: T_R, v: ROLL_R }, { t: 3.8, v: -0.05 }, { t: 4.05, v: 0 }, { t: T_END, v: 0 }]);
+const facing = t => rotY(d, yawT(t));
+function pelvisRaw(t) {
+  if (t < T_TO) { const [u, v] = pkA(t); return W(u, v, pyA(t)); }
+  if (t < T_LAND) { const tau = t - T_TO; return W(0.15 + VH * tau, 0, Y_TO + VY * tau - 0.5 * G * tau * tau); }
+  const [u, v] = pkB(t); return W(u, v, pyB(t));
+}
+function pelvisVel(t) { const e = 0.004; return pelvisRaw(t + e).sub(pelvisRaw(t - e)).multiplyScalar(1 / (2 * e)); }
+
+// feet: plants (fixed on the floor, heel rolls up before lift), pelvis-relative flight poses, swings between
+const footSegs = {
+  L: [
+    { type: 'plant', u: -5.80, v: 0.20, yaw: 0.12, t0: -1, t1: 1.25, roll: 0.16, pMax: 0.55 },
+    { type: 'plant', u: -4.95, v: 0.09, yaw: 0.02, t0: 1.55, t1: 1.75 },
+    { type: 'plant', u: -2.55, v: 0.09, yaw: 0.02, t0: 2.29, t1: 2.49 },
+    { type: 'plant', u: 0.0, v: 0.08, yaw: 0.0, t0: 3.06, t1: T_TO, roll: 0.13, pMax: 0.95 },
+    { type: 'rel', t0: T_TO + 0.06, t1: T_LAND - 0.07, keys: [
+      { t: T_TO + 0.06, v: [-0.22, 0.09, -0.80, 0.85] }, { t: T_R, v: [-0.10, 0.09, -0.80, 0.6] }, { t: T_LAND - 0.07, v: [0.0, 0.15, -0.82, 0.35] }] },
+    { type: 'plant', u: U_LAND - 0.03, v: 0.17, yaw: 0.05, t0: T_LAND, t1: 4.80, land: 0.3, roll: 0.12, pMax: 0.35 },
+    { type: 'plant', u: U_LAND + 0.30, v: -0.12, yaw: 0.85, t0: 5.08, t1: Infinity },
+  ],
+  R: [
+    { type: 'plant', u: -5.52, v: -0.21, yaw: -0.18, t0: -1, t1: 1.62, roll: 0.14, pMax: 0.75 },
+    { type: 'plant', u: -3.85, v: -0.09, yaw: -0.02, t0: 1.92, t1: 2.12 },
+    { type: 'plant', u: -1.15, v: -0.10, yaw: -0.02, t0: 2.68, t1: 2.90, roll: 0.13, pMax: 0.8 },
+    { type: 'rel', t0: 3.16, t1: T_LAND - 0.08, keys: [
+      { t: 3.16, v: [0.0, -0.10, -0.62, 0.6] }, { t: T_TO + 0.08, v: [0.30, -0.10, -0.50, 0.35] }, { t: T_R, v: [0.42, -0.10, -0.42, 0.25] },
+      { t: T_R + 0.15, v: [0.30, -0.12, -0.62, 0.3] }, { t: T_LAND - 0.08, v: [0.12, -0.15, -0.80, 0.35] }] },
+    { type: 'plant', u: U_LAND + 0.10, v: -0.16, yaw: -0.05, t0: T_LAND + 0.01, t1: 4.45, land: 0.3, roll: 0.1, pMax: 0.35 },
+    { type: 'plant', u: U_LAND + 0.25, v: -0.52, yaw: 0.45, t0: 4.72, t1: 5.25, roll: 0.1, pMax: 0.3 },
+    { type: 'plant', u: U_LAND + 0.08, v: -0.55, yaw: 1.15, t0: 5.52, t1: Infinity },
+  ],
+};
+for (const k of ['L', 'R']) for (const s of footSegs[k]) if (s.type === 'rel') s.track = H(s.keys);
+const BALL_OF_FOOT = 0.14;
+function pivotOnBall(ball, F, p) {  // ankle from the ball of the foot when the heel is raised by pitch p
+  return V(ball.x, 0, ball.z).addScaledVector(F, -BALL_OF_FOOT * Math.cos(p) + LEG.ankleH * Math.sin(p))
+    .setY(BALL_OF_FOOT * Math.sin(p) + LEG.ankleH * Math.cos(p));
+}
+function evalSeg(s, t) {
+  if (s.type === 'plant') {
+    const F = rotY(d, s.yaw), flat = W(s.u, s.v, LEG.ankleH), ball = flat.clone().addScaledVector(F, BALL_OF_FOOT);
+    let p = 0;
+    if (isFinite(s.t1)) { const roll = s.roll ?? 0.12, pm = s.pMax ?? 0.7; p = pm * smooth((t - (s.t1 - roll)) / roll); }
+    if (s.land) p = Math.max(p, s.land * (1 - smooth((t - s.t0) / 0.09)));
+    return { pos: pivotOnBall(ball, F, p), F, p, planted: true };
+  }
+  const P = pelvisRaw(t), F = facing(t), Lb = leftOf(F), [f, side, up, p] = s.track(t);
+  return { pos: P.clone().addScaledVector(F, f).addScaledVector(Lb, side).addScaledVector(UP, up), F, p, planted: false };
+}
+function footAt(segs, t) {
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    if (t >= s.t0 && t <= s.t1) return evalSeg(s, t);
+    const n = segs[i + 1];
+    if (n && t > s.t1 && t < n.t0) {
+      const A = evalSeg(s, s.t1), Bf = evalSeg(n, n.t0), u = (t - s.t1) / (n.t0 - s.t1);
+      const dist = Math.hypot(Bf.pos.x - A.pos.x, Bf.pos.z - A.pos.z);
+      const h = (s.type === 'plant' && n.type === 'plant') ? clamp(0.04 + 0.1 * dist, 0.05, 0.30) : (s.type === 'plant' ? 0.06 : 0);
+      const pos = V(lerp(A.pos.x, Bf.pos.x, smoother(u)), lerp(A.pos.y, Bf.pos.y, u) + h * Math.sin(Math.PI * Math.pow(u, 0.7)), lerp(A.pos.z, Bf.pos.z, smoother(u)));
+      const F = A.F.clone().lerp(Bf.F, smooth(u)).normalize();
+      return { pos, F, p: lerp(A.p, Bf.p, smooth(u)) - 0.12 * Math.sin(Math.PI * u), planted: false };
+    }
+  }
+  return evalSeg(segs[segs.length - 1], t);
+}
+
+// ---------------------------------------------------------------- ball: dribbles, gather, carry (pre-release)
+const COR_FLOOR = 0.82;
+const bodyPt = (t, f, r, y) => { const P = pelvisRaw(t), F = facing(t), Rb = rightOf(F); return V(P.x + F.x * f + Rb.x * r, y, P.z + F.z * f + Rb.z * r); };
+const dribSpecs = [
+  { rel: 0.20, floor: 0.40, ro: [0.27, 0.30, 0.80], fo: [0.32, 0.33], co: [0.27, 0.31, 0.80] },
+  { rel: 0.80, floor: 1.00, ro: [0.27, 0.30, 0.80], fo: [0.32, 0.33], co: [0.27, 0.31, 0.80] },
+  { rel: 1.32, floor: 1.52, ro: [0.30, 0.31, 0.88], fo: [0.78, 0.34], co: [0.30, 0.31, 0.90] },
+  { rel: 2.22, floor: 2.38, ro: [0.30, 0.31, 0.86], fo: [0.62, 0.31], co: [0.30, 0.20, 1.02] },
+];
+const dribbles = dribSpecs.map(s => {
+  const pRel = bodyPt(s.rel, s.ro[0], s.ro[1], s.ro[2]), pF = bodyPt(s.floor, s.fo[0], s.fo[1], BALL_R), T1 = s.floor - s.rel;
+  const vRel = V((pF.x - pRel.x) / T1, (pF.y - pRel.y + 0.5 * G * T1 * T1) / T1, (pF.z - pRel.z) / T1);
+  const vFy = vRel.y - G * T1, vUpY = -COR_FLOOR * vFy, apex = BALL_R + vUpY * vUpY / (2 * G);
+  const yC = Math.min(s.co[2], apex - 0.025);
+  const T2b = (vUpY - Math.sqrt(Math.max(0, vUpY * vUpY - 2 * G * (yC - BALL_R)))) / G, tC = s.floor + T2b;
+  const pC = bodyPt(tC, s.co[0], s.co[1], yC);
+  const vUp = V((pC.x - pF.x) / T2b, vUpY, (pC.z - pF.z) / T2b), vC = vUp.clone().setY(vUpY - G * T2b);
+  return { ...s, pRel, vRel, pF, vUp, tC, pC, vC };
+});
+const T_GATHER = dribbles[3].tC;
+const ballSegs = [];
+{
+  const p0 = bodyPt(0, 0.27, 0.30, 0.86);
+  ballSegs.push({ t0: 0, t1: dribbles[0].rel, f: t => hermiteV(p0, V(), dribbles[0].pRel, dribbles[0].vRel, 0, dribbles[0].rel, t), hand: true });
+  dribbles.forEach((D, i) => {
+    ballSegs.push({ t0: D.rel, t1: D.floor, f: t => { const s = t - D.rel; return D.pRel.clone().addScaledVector(D.vRel, s).add(V(0, -0.5 * G * s * s, 0)); } });
+    ballSegs.push({ t0: D.floor, t1: D.tC, f: t => { const s = t - D.floor; return D.pF.clone().addScaledVector(D.vUp, s).add(V(0, -0.5 * G * s * s, 0)); } });
+    const N = dribbles[i + 1];
+    if (N) {
+      const vIn = D.vC.clone().multiplyScalar(0.35).addScaledVector(pelvisVel(D.tC), 0.65);
+      ballSegs.push({ t0: D.tC, t1: N.rel, f: t => hermiteV(D.pC, vIn, N.pRel, N.vRel, D.tC, N.rel, t), hand: true });
+    }
+  });
+  const D = dribbles[3];
+  const knots = [
+    { t: D.tC, p: D.pC, v: D.vC.clone().multiplyScalar(0.25).addScaledVector(pelvisVel(D.tC), 0.75) },
+    { t: 2.92, p: bodyPt(2.92, 0.30, 0.12, pelvisRaw(2.92).y + 0.36), v: pelvisVel(2.92) },
+    { t: T_TO, p: bodyPt(T_TO, 0.28, 0.20, Y_TO + 0.78), v: pelvisVel(T_TO).add(V(0, 1.6, 0)) },
+    { t: T_R, p: P0, v: V0 },
+  ];
+  for (let i = 0; i < knots.length - 1; i++) {
+    const A = knots[i], Bk = knots[i + 1];
+    ballSegs.push({ t0: A.t, t1: Bk.t, f: t => hermiteV(A.p, A.v, Bk.p, Bk.v, A.t, Bk.t, t), hand: true, carry: true });
+  }
+}
+function ballPre(t) { for (const s of ballSegs) if (t <= s.t1) return s.f(Math.max(t, s.t0)); return P0.clone(); }
+
+// post-release flight: integrated physics (glass, rim, net drag, floor)
+const SAMPLE_HZ = 240, NS = Math.ceil(T_END * SAMPLE_HZ) + 2;
+const ballPos = new Float32Array(NS * 3), ballQuat = new Float32Array(NS * 4);
+const EV = { hit: null, rimPass: null, floor1: null, rimHits: 0, minRimGap: 9 };
+const pathPts = [];
+(function simulateBall() {
+  const iR = Math.ceil(T_R * SAMPLE_HZ);
+  for (let i = 0; i < iR; i++) { const p = ballPre(i / SAMPLE_HZ); ballPos.set([p.x, p.y, p.z], i * 3); }
+  const p = P0.clone(), v = V0.clone(), dt = 1 / 2000;
+  let t = T_R, next = iR, hitDone = false;
+  const post = [];
+  while (next < NS) {
+    v.y -= G * dt; p.addScaledVector(v, dt); t += dt;
+    if (!hitDone && v.z < 0 && p.z - BALL_R <= CT.boardZ && Math.abs(p.x) < CT.boardW / 2 && p.y > CT.boardBottom) {
+      p.z = CT.boardZ + BALL_R; v.z = -E_GLASS * v.z; v.x *= FR_X; v.y *= FR_Y; hitDone = true; EV.hit = { t, p: p.clone() };
+    }
+    const q = p.clone().sub(RIM_C), hr = Math.hypot(q.x, q.z);
+    const closest = V(q.x / (hr || 1) * (CT.rimR + CT.rod), 0, q.z / (hr || 1) * (CT.rimR + CT.rod)).add(RIM_C);
+    const dv = p.clone().sub(closest), dist = dv.length();
+    if (t > T_R + 0.02) EV.minRimGap = Math.min(EV.minRimGap, dist - BALL_R - CT.rod);
+    if (dist < BALL_R + CT.rod) {
+      dv.normalize(); p.copy(closest).addScaledVector(dv, BALL_R + CT.rod); const vn = v.dot(dv); if (vn < 0) v.addScaledVector(dv, -1.5 * vn); EV.rimHits++;
+    }
+    if (EV.rimPass === null && hitDone && p.y < CT.rimY && hr < CT.rimR) EV.rimPass = t;
+    if (hr < CT.rimR && p.y < CT.rimY && p.y > CT.rimY - 0.44) {
+      const k = 1 - 5 * dt; v.x *= k; v.z *= k; v.y *= 1 - 1.6 * dt;
+      v.x -= q.x * 14 * dt; v.z -= q.z * 14 * dt;
+    }
+    if (p.y < BALL_R && v.y < 0) {
+      p.y = BALL_R;
+      if (EV.floor1 === null) EV.floor1 = t;
+      v.y = -COR_FLOOR * 0.95 * v.y; v.x *= 0.88; v.z *= 0.88;
+      if (v.y < 0.25) v.y = 0;
+    }
+    if (p.y <= BALL_R + 1e-4 && v.y === 0) { const k = 1 - 0.35 * dt; v.x *= k; v.z *= k; }
+    if (t >= next / SAMPLE_HZ) { ballPos.set([p.x, p.y, p.z], next * 3); post.push(p.clone()); next++; }
+  }
+  pathPts.push(...post);
+  // spin: integrate angular velocity from the sampled motion
+  const q = new THREE.Quaternion(), dq = new THREE.Quaternion(), w = V(), vel = V();
+  for (let i = 0; i < NS; i++) {
+    const ti = i / SAMPLE_HZ, j = Math.min(i + 1, NS - 1), k = Math.max(i - 1, 0);
+    vel.set(ballPos[j * 3] - ballPos[k * 3], ballPos[j * 3 + 1] - ballPos[k * 3 + 1], ballPos[j * 3 + 2] - ballPos[k * 3 + 2]).multiplyScalar(SAMPLE_HZ / Math.max(1, j - k));
+    const vh = V(vel.x, 0, vel.z), y = ballPos[i * 3 + 1];
+    if (ti < T_R) {
+      const inHand = ballSegs.some(s => s.hand && ti >= s.t0 && ti <= s.t1);
+      w.crossVectors(UP, vh).multiplyScalar(inHand ? 0 : 0.5 / BALL_R);
+    } else if (y > BALL_R + 0.002) {
+      const spin = (EV.hit && ti > EV.hit.t) ? 5 : 14;               // backspin, mostly killed by the glass
+      w.crossVectors(UP, vh).normalize().multiplyScalar(-spin);
+    } else w.crossVectors(UP, vh).multiplyScalar(1 / BALL_R);        // rolling
+    const ang = w.length() / SAMPLE_HZ;
+    if (ang > 1e-6) { dq.setFromAxisAngle(w.clone().normalize(), ang); q.premultiply(dq); }
+    ballQuat.set([q.x, q.y, q.z, q.w], i * 4);
+  }
+})();
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+function ballAt(t, outQ) {
+  const f = clamp(t, 0, T_END) * SAMPLE_HZ, i = Math.min(Math.floor(f), NS - 2), s = f - i;
+  const p = V(lerp(ballPos[i * 3], ballPos[i * 3 + 3], s), lerp(ballPos[i * 3 + 1], ballPos[i * 3 + 4], s), lerp(ballPos[i * 3 + 2], ballPos[i * 3 + 5], s));
+  if (t < T_R && t >= 0) p.copy(ballPre(t));                         // exact while in or near the hands
+  if (outQ) { _qa.fromArray(ballQuat, i * 4); _qb.fromArray(ballQuat, i * 4 + 4); outQ.slerpQuaternions(_qa, _qb, s); }
+  return p;
+}
+
+// ---------------------------------------------------------------- pose solver
+function ik2(root, target, a, b, pole) {
+  const dv = target.clone().sub(root); let dist = dv.length();
+  const n = dv.multiplyScalar(1 / (dist || 1));
+  dist = clamp(dist, 0.05, (a + b) * 0.9995);
+  const cosA = clamp((a * a + dist * dist - b * b) / (2 * a * dist), -1, 1), sinA = Math.sqrt(1 - cosA * cosA);
+  const bend = pole.clone().addScaledVector(n, -pole.dot(n)); if (bend.lengthSq() < 1e-8) bend.set(0, 0, 1); bend.normalize();
+  return { mid: root.clone().addScaledVector(n, a * cosA).addScaledVector(bend, a * sinA), end: root.clone().addScaledVector(n, dist) };
+}
+const toLocal = (w, t) => { const P = pelvisRaw(t), F = facing(t), Rb = rightOf(F), q = w.clone().sub(P); return [q.dot(F), q.dot(Rb), q.y]; };
+const fromLocal = (l, P, F) => { const Rb = rightOf(F); return P.clone().addScaledVector(F, l[0]).addScaledVector(Rb, l[1]).addScaledVector(UP, l[2]); };
+const onTop = (ball, F) => ball.clone().addScaledVector(UP, BALL_R + 0.03).addScaledVector(F, -0.075);
+
+function core(t) {
+  const P = pelvisRaw(t), F = facing(t), Lb = leftOf(F), Rb = rightOf(F);
+  const aL = footAt(footSegs.L, t), aR = footAt(footSegs.R, t);
+  const run = smooth((t - 1.3) / 0.25) * (1 - smooth((t - 2.95) / 0.25));
+  const sw = clamp(aR.pos.clone().sub(aL.pos).dot(F) / 0.9, -1, 1);
+  const Fp = rotY(F, 0.12 * sw * run), Qp = bodyQuat(Fp, 0.05, 0), Lp = leftOf(Fp);
+  const hip = s => P.clone().addScaledVector(Lp, s * LEG.hipHalf);
+  for (const [a, s] of [[aL, 1], [aR, -1]]) if (a.planted) {
+    const h = hip(s), horiz = Math.hypot(h.x - a.pos.x, h.z - a.pos.z), Lmax = (LEG.thigh + LEG.shin) * 0.997;
+    if (horiz < Lmax) P.y = smin(P.y, a.pos.y + Math.sqrt(Lmax * Lmax - horiz * horiz), 0.02);
+  }
+  const Ft = rotY(F, -0.08 * sw * run), Qt = bodyQuat(Ft, leanT(t), rollT(t));
+  const SR = P.clone().add(SH_R_LOCAL.clone().applyQuaternion(Qt)), SL = P.clone().add(SH_L_LOCAL.clone().applyQuaternion(Qt));
+  return { t, P, F, Lb, Rb, aL, aR, sw, run, Fp, Qp, Lp, hipL: hip(1), hipR: hip(-1), Ft, Qt, SR, SL };
+}
+const SR_AT_R = core(T_R).SR;
+// right hand after release: shoulder-relative keys in the body frame [forward, right, up]
+const relKeysR = (() => {
+  const c = core(T_R), w0 = P0.clone().addScaledVector(aDir, -GRIP).sub(c.SR);
+  const ext = aDir.clone().multiplyScalar(ARM.upper + ARM.fore - 0.01).addScaledVector(d, 0.03);
+  const L = v => [v.dot(d), v.dot(RVEC), v.y];
+  return H([{ t: T_R, v: L(w0) }, { t: T_R + 0.14, v: L(ext) }, { t: T_LAND, v: [0.22, 0.14, -0.18] }, { t: T_LAND + 0.2, v: [0.16, 0.12, -0.42] },
+    { t: 4.8, v: [0.05, 0.06, -0.52] }, { t: T_END, v: [0.05, 0.06, -0.52] }]);
+})();
+const relKeysL = H([{ t: T_R, v: [0.30, 0.14, 0.10] }, { t: 3.80, v: [0.28, 0.15, 0.04] }, { t: T_LAND, v: [0.22, 0.16, -0.20] },
+  { t: T_LAND + 0.2, v: [0.15, 0.12, -0.42] }, { t: 4.8, v: [0.05, 0.06, -0.52] }, { t: T_END, v: [0.05, 0.06, -0.52] }]);
+const shoulderOff = (S, F, side, l) => S.clone().addScaledVector(F, l[0]).addScaledVector(side, l[1]).addScaledVector(UP, l[2]);
+
+function handTargets(c, ball) {
+  const { t, F, Rb, Lb, SR, SL } = c;
+  // ---- right
+  let wR;
+  if (t >= T_R) wR = shoulderOff(SR, F, Rb, relKeysR(t));
+  else if (t >= T_GATHER) {
+    const side = ball.clone().addScaledVector(Rb, BALL_R + 0.06).addScaledVector(F, -0.03).addScaledVector(UP, -0.03);
+    const under = ball.clone().addScaledVector(ball.clone().sub(SR).normalize(), -GRIP);
+    wR = side.lerp(under, smooth((t - 2.98) / 0.25));
+  } else {
+    const seg = ballSegs.find(s => t <= s.t1);
+    if (!seg || seg.hand) wR = onTop(ball, F);
+    else {
+      const D = dribbles.find(D => t >= D.rel && t <= D.tC);
+      const isG = D === dribbles[3];
+      const wRel = toLocal(onTop(D.pRel, facing(D.rel)), D.rel);
+      const catchW = isG ? D.pC.clone().addScaledVector(rightOf(facing(D.tC)), BALL_R + 0.06).addScaledVector(facing(D.tC), -0.03).addScaledVector(UP, -0.03) : onTop(D.pC, facing(D.tC));
+      const wC = toLocal(catchW, D.tC), s = (t - D.rel) / (D.tC - D.rel);
+      const l = wRel.map((a, i) => lerp(a, wC[i], smooth(s)));
+      l[2] -= 0.10 * Math.sin(Math.PI * s);
+      wR = fromLocal(l, pelvisRaw(t), F);
+    }
+  }
+  // ---- left
+  const guard = shoulderOff(SL, F, Lb, [0.26, 0.08, -0.15]);
+  const swing = shoulderOff(SL, F, Lb, [0.10 + 0.22 * c.sw, 0.07, -0.30 + 0.10 * Math.max(0, c.sw)]);
+  let wL = guard.lerp(swing, smooth((t - 1.15) / 0.3));
+  const grip = ball.clone().addScaledVector(Lb, BALL_R + 0.06).addScaledVector(F, 0.02).addScaledVector(UP, -0.01);
+  wL.lerp(grip, smooth((t - (T_GATHER - 0.28)) / 0.28));
+  if (t > 3.36) wL.lerp(shoulderOff(SL, F, Lb, relKeysL(Math.max(t, T_R))), smooth((t - 3.36) / 0.2));
+  return { wR, wL };
+}
+
+function lookTarget(t, ball) {
+  const rim = V(0, 3.1, 1.55);
+  return rim.lerp(B_PT, smooth((t - (T_TO - 0.25)) / 0.25)).lerp(ball, smooth((t - T_R - 0.05) / 0.2));
+}
+
+function computePose(t) {
+  const c = core(t);
+  const ball = ballAt(t);
+  const kneeL = ik2(c.hipL, c.aL.pos, LEG.thigh, LEG.shin, c.Fp.clone().addScaledVector(c.Lp, 0.12));
+  const kneeR = ik2(c.hipR, c.aR.pos, LEG.thigh, LEG.shin, c.Fp.clone().addScaledVector(c.Lp, -0.12));
+  const { wR, wL } = handTargets(c, ball);
+  const armPole = (S, Wt, out) => {
+    const e = smooth(Wt.clone().sub(S).normalize().y + 0.1);
+    const low = c.Ft.clone().multiplyScalar(-0.55).addScaledVector(out, 0.4).addScaledVector(UP, -0.75);
+    const high = c.Ft.clone().multiplyScalar(0.5).addScaledVector(out, 0.7).addScaledVector(UP, 0.2);
+    return low.lerp(high, e).normalize();
+  };
+  const armR = ik2(c.SR, wR, ARM.upper, ARM.fore, armPole(c.SR, wR, c.Rb));
+  const armL = ik2(c.SL, wL, ARM.upper, ARM.fore, armPole(c.SL, wL, c.Lb));
+  const Ut = UP.clone().applyQuaternion(c.Qt), FtLean = AX_Z.clone().applyQuaternion(c.Qt);
+  const neckBase = c.P.clone().add(V(0, SPINE + 0.015, -0.005).applyQuaternion(c.Qt));
+  const headPivot = neckBase.clone().addScaledVector(Ut, NECK_UP);
+  let dir = lookTarget(t, ball).sub(headPivot).normalize();
+  const lim = 1.0, ang = Math.acos(clamp(dir.dot(FtLean), -1, 1));
+  if (ang > lim) { const perp = dir.clone().addScaledVector(FtLean, -dir.dot(FtLean)).normalize(); dir = FtLean.clone().multiplyScalar(Math.cos(lim)).addScaledVector(perp, Math.sin(lim)); }
+  const hx = V().crossVectors(Ut, dir).normalize(), hy = V().crossVectors(dir, hx);
+  const Qh = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(hx, hy, dir));
+  const headC = headPivot.clone().add(V(0, HEAD_UP - NECK_UP + 0.0, 0.012).applyQuaternion(Qh));
+  return { ...c, ball, kneeL, kneeR, armR, armL, wR, wL, neckBase, headPivot, headC, Qh };
+}
+
+// ---------------------------------------------------------------- player meshes
+const jerseyMap = jerseyTexture();
+const PM = {
+  skin: new THREE.MeshPhysicalMaterial({ color: 0x8a5a3d, roughness: 0.55, sheen: 0.35, sheenColor: new THREE.Color(0xffcfae), sheenRoughness: 0.6 }),
+  jersey: new THREE.MeshPhysicalMaterial({ map: jerseyMap, roughness: 0.78, sheen: 1, sheenColor: new THREE.Color(0x9fb6ff), sheenRoughness: 0.45 }),
+  shorts: new THREE.MeshPhysicalMaterial({ color: 0x1d4fc2, roughness: 0.78, sheen: 1, sheenColor: new THREE.Color(0x9fb6ff), sheenRoughness: 0.45, side: THREE.DoubleSide }),
+  trim: new THREE.MeshPhysicalMaterial({ color: 0xf2f5fb, roughness: 0.8, sheen: 0.6, side: THREE.DoubleSide }),
+  shoe: new THREE.MeshPhysicalMaterial({ color: 0xf3f3f1, roughness: 0.45, clearcoat: 0.3 }),
+  accent: new THREE.MeshStandardMaterial({ color: 0xff6a12, roughness: 0.5 }),
+  sole: new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.7 }),
+  sock: new THREE.MeshStandardMaterial({ color: 0xf6f6f4, roughness: 0.92 }),
+  hair: new THREE.MeshPhysicalMaterial({ color: 0x120d0b, roughness: 0.62, sheen: 0.25, sheenColor: new THREE.Color(0x4a3328) }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x120c0a, roughness: 0.4 }),
+  eye: new THREE.MeshStandardMaterial({ color: 0xf2ece4, roughness: 0.3 }),
+  lips: new THREE.MeshStandardMaterial({ color: 0x5c2f26, roughness: 0.5 }),
+  band: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }),
+};
+const player = new THREE.Group(); scene.add(player);
+const add = (geo, mat, parent = player) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+function lathe(L, prof, seg = 18, open = false) {
+  const pts = []; for (let i = prof.length - 1; i >= 0; i--) pts.push(new THREE.Vector2(prof[i][1], -prof[i][0] * L));
+  return new THREE.LatheGeometry(pts, seg);
+}
+const _m4 = new THREE.Matrix4(), _x = V(), _y = V(), _z = V();
+function orient(obj, from, to, pole) {
+  _y.subVectors(from, to).normalize();
+  _z.copy(pole).addScaledVector(_y, -pole.dot(_y)); if (_z.lengthSq() < 1e-8) _z.set(0, 0, 1); _z.normalize();
+  _x.crossVectors(_y, _z); _m4.makeBasis(_x, _y, _z); obj.quaternion.setFromRotationMatrix(_m4); obj.position.copy(from);
+}
+function setBasis(obj, pos, x, y, z) { _m4.makeBasis(x, y, z); obj.quaternion.setFromRotationMatrix(_m4); obj.position.copy(pos); }
+
+const body = {};
+{
+  // pelvis / shorts
+  const sh = [[0.0, -0.135], [0.15, -0.125], [0.176, -0.07], [0.18, 0.0], [0.168, 0.06], [0.152, 0.11], [0.147, 0.14]].map(([r, y]) => new THREE.Vector2(r, y));
+  const shg = new THREE.LatheGeometry(sh, 28); shg.scale(1, 1, 0.8);
+  body.pelvis = add(shg, PM.shorts);
+  const wb = add(new THREE.TorusGeometry(1, 0.06, 8, 40), PM.trim, body.pelvis); wb.rotation.x = Math.PI / 2; wb.scale.set(0.148, 0.148, 0.2); wb.position.y = 0.13;
+  wb.geometry = new THREE.TorusGeometry(1, 0.06, 8, 40); wb.scale.set(0.148, 0.118, 0.2);
+  // torso / jersey (u=0.75 front, 0.25 back)
+  const tp = [[0.149, 0.0], [0.141, 0.10], [0.128, 0.17], [0.135, 0.25], [0.15, 0.33], [0.158, 0.40], [0.163, 0.46], [0.158, 0.50], [0.14, 0.53], [0.10, 0.56], [0.062, 0.585], [0.05, 0.59]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  const tg = new THREE.LatheGeometry(tp, 40, Math.PI / 2); tg.scale(1, 1, 0.72);
+  body.torso = add(tg, PM.jersey);
+  // neck + head
+  const ng = new THREE.CylinderGeometry(0.044, 0.05, 1, 16, 1, true); ng.translate(0, -0.5, 0);
+  body.neck = add(ng, PM.skin);
+  const head = new THREE.Group(); player.add(head); body.head = head;
+  const skull = add(new THREE.SphereGeometry(0.1, 32, 24), PM.skin, head); skull.scale.set(0.79, 1.0, 0.93);
+  const jaw = add(new THREE.SphereGeometry(0.066, 24, 16), PM.skin, head); jaw.scale.set(0.8, 0.72, 0.9); jaw.position.set(0, -0.048, 0.016);
+  const nose = add(new THREE.SphereGeometry(0.016, 12, 10), PM.skin, head); nose.scale.set(0.9, 1.2, 1); nose.position.set(0, -0.012, 0.092);
+  for (const sg of [-1, 1]) {
+    const ew = add(new THREE.SphereGeometry(0.0115, 12, 10), PM.eye, head); ew.position.set(sg * 0.031, 0.01, 0.079);
+    const pu = add(new THREE.SphereGeometry(0.0068, 10, 8), PM.dark, head); pu.position.set(sg * 0.031, 0.01, 0.0895);
+    const br = add(new THREE.BoxGeometry(0.03, 0.005, 0.008), PM.hair, head); br.position.set(sg * 0.031, 0.031, 0.087); br.rotation.z = -sg * 0.12;
+    const ear = add(new THREE.SphereGeometry(0.021, 12, 10), PM.skin, head); ear.scale.set(0.45, 1, 0.8); ear.position.set(sg * 0.079, -0.002, -0.006);
+  }
+  const lips = add(new RoundedBoxGeometry(0.036, 0.01, 0.012, 2, 0.004), PM.lips, head); lips.position.set(0, -0.05, 0.085);
+  const hair = add(new THREE.SphereGeometry(0.107, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.6), PM.hair, head);
+  hair.scale.set(0.81, 1.0, 0.95); hair.rotation.x = -0.5; hair.position.set(0, 0.004, -0.008);
+  const hb = add(new THREE.TorusGeometry(1, 0.1, 8, 48), PM.band, head); hb.rotation.x = Math.PI / 2 - 0.25; hb.scale.set(0.081, 0.093, 1.3); hb.position.set(0, 0.04, -0.004);
+  hb.geometry.dispose(); hb.geometry = (() => { const g = new THREE.TorusGeometry(1, 0.1, 8, 48); g.rotateX(Math.PI / 2); g.scale(0.081, 0.12, 0.094); return g; })();
+  hb.rotation.set(-0.22, 0, 0); hb.scale.set(1, 1, 1);
+  const scr = add(new THREE.TorusGeometry(0.02, 0.008, 8, 20), PM.band, head); scr.position.set(0, 0.03, -0.1); scr.rotation.x = 0.6;
+  body.tail = [];
+  for (let i = 0; i < 5; i++) {
+    const r = lerp(0.026, 0.012, i / 4), g = new THREE.CapsuleGeometry(r, 0.05, 4, 10); g.translate(0, -0.025, 0);
+    body.tail.push(add(g, PM.hair));
+  }
+  // limbs
+  const legGeo = {
+    thigh: lathe(LEG.thigh, [[0, 0.082], [0.3, 0.076], [0.7, 0.058], [0.92, 0.048], [1, 0.045]]),
+    shortLeg: lathe(LEG.thigh, [[0.0, 0.1], [0.44, 0.094]], 22),
+    shin: lathe(LEG.shin, [[0, 0.046], [0.15, 0.053], [0.32, 0.055], [0.6, 0.041], [0.85, 0.031], [1, 0.029]]),
+    sock: lathe(LEG.shin, [[0.72, 0.037], [1.0, 0.034]]),
+  };
+  const armGeo = {
+    upper: lathe(ARM.upper, [[0, 0.046], [0.2, 0.043], [0.6, 0.036], [1, 0.031]]),
+    fore: lathe(ARM.fore, [[0, 0.032], [0.25, 0.035], [0.7, 0.028], [1, 0.022]]),
+  };
+  for (const side of ['L', 'R']) {
+    const sg = side === 'L' ? 1 : -1;
+    const thigh = add(legGeo.thigh, PM.skin); add(legGeo.shortLeg, PM.shorts, thigh);
+    const hem = add(new THREE.TorusGeometry(0.094, 0.006, 6, 24), PM.trim, thigh); hem.rotation.x = Math.PI / 2; hem.position.y = -0.44 * LEG.thigh;
+    const knee = add(new THREE.SphereGeometry(0.049, 16, 12), PM.skin);
+    const shin = add(legGeo.shin, PM.skin); add(legGeo.sock, PM.sock, shin);
+    const foot = new THREE.Group(); player.add(foot);
+    const upper = new THREE.CapsuleGeometry(0.045, 0.16, 6, 16); upper.rotateX(Math.PI / 2); upper.scale(1.08, 0.85, 1);
+    const up = add(upper, PM.shoe, foot); up.position.set(0, -0.03, 0.06);
+    const sole = add(new RoundedBoxGeometry(0.098, 0.024, 0.285, 2, 0.01), PM.sole, foot); sole.position.set(0, -0.056, 0.062);
+    const acc = add(new RoundedBoxGeometry(0.004, 0.022, 0.12, 1, 0.002), PM.accent, foot); acc.position.set(sg * 0.049, -0.03, 0.05); acc.rotation.x = 0.25;
+    const col = add(new THREE.CylinderGeometry(0.042, 0.045, 0.05, 18), PM.shoe, foot); col.position.set(0, 0.005, -0.005);
+    const ua = add(armGeo.upper, PM.skin), elbow = add(new THREE.SphereGeometry(0.031, 12, 10), PM.skin), fa = add(armGeo.fore, PM.skin);
+    const cap = add(new THREE.SphereGeometry(0.052, 16, 12), PM.skin);
+    const hand = new THREE.Group(); player.add(hand);
+    const palm = add(new RoundedBoxGeometry(0.072, 0.085, 0.026, 2, 0.01), PM.skin, hand); palm.position.set(0, -0.045, 0);
+    const fing = add(new RoundedBoxGeometry(0.068, 0.075, 0.019, 2, 0.008), PM.skin, hand); fing.position.set(0, -0.115, 0.008); fing.rotation.x = -0.3;
+    const thumb = add(new RoundedBoxGeometry(0.022, 0.056, 0.022, 2, 0.009), PM.skin, hand); 
+    thumb.position.set(sg * 0.042, -0.04, 0.014); thumb.rotation.z = sg * 0.5;
+    body[side] = { thigh, knee, shin, foot, ua, elbow, fa, cap, hand };
+  }
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 48, 32), (() => { const t = ballTexture(); return new THREE.MeshPhysicalMaterial({ map: t.map, bumpMap: t.bump, bumpScale: 0.6, roughness: 0.72, sheen: 0.2 }); })());
+  ball.castShadow = true; scene.add(ball); body.ball = ball;
+}
+
+// ---------------------------------------------------------------- net + ponytail simulation
+const NET = { cols: 12, rows: 6, len: 0.43 };
+const net = { p: [], q: [], rest: [], edges: [], restR: [] };
+const tail = { p: [], q: [] };
+const SIM_DT = 1 / 240;
+let simT = -Infinity;
+function netInit() {
+  net.p = []; net.q = []; net.restR = []; net.edges = [];
+  for (let k = 0; k <= NET.rows; k++) for (let j = 0; j < NET.cols; j++) {
+    const a = (j + 0.5 * k) / NET.cols * Math.PI * 2, r = lerp(CT.rimR - 0.003, 0.128, Math.pow(k / NET.rows, 0.85));
+    const p = V(Math.cos(a) * r, CT.rimY - 2 * CT.rod - 0.012 - k * NET.len / NET.rows, CT.basketZ + Math.sin(a) * r);
+    net.p.push(p); net.q.push(p.clone()); net.restR.push(r);
+  }
+  const id = (k, j) => k * NET.cols + ((j + NET.cols) % NET.cols);
+  for (let k = 0; k < NET.rows; k++) for (let j = 0; j < NET.cols; j++) {
+    for (const [a, b] of [[id(k, j), id(k + 1, j)], [id(k, j), id(k + 1, j - 1)]]) net.edges.push([a, b, net.p[a].distanceTo(net.p[b])]);
+  }
+}
+function tailAnchor(pose) {
+  return pose.headC.clone().add(V(0, 0.03, -0.1).applyQuaternion(pose.Qh));
+}
+function simReset() {
+  netInit();
+  const pose = computePose(0), a = tailAnchor(pose);
+  tail.p = []; tail.q = [];
+  for (let i = 0; i < 6; i++) { const p = a.clone().add(V(0, -0.05 * i, -0.01 * i)); tail.p.push(p); tail.q.push(p.clone()); }
+  simT = -1.2;
+  for (let i = 0; i < 288; i++) simStep(0, pose, true);
+}
+const _tmp = V();
+function simStep(t, pose, settle = false) {
+  const ball = settle ? ballAt(0) : ballAt(t);
+  // net
+  const g = -G * SIM_DT * SIM_DT;
+  for (let i = NET.cols; i < net.p.length; i++) {
+    const p = net.p[i], q = net.q[i];
+    _tmp.copy(p).sub(q).multiplyScalar(0.975); q.copy(p); p.add(_tmp); p.y += g;
+    const dx = p.x, dz = p.z - CT.basketZ, r = Math.hypot(dx, dz), rr = net.restR[i];
+    const k = 0.035 * (rr - r) / (r || 1); p.x += dx * k; p.z += dz * k;
+  }
+  for (let it = 0; it < 8; it++) {
+    for (const [a, b, L] of net.edges) {
+      const pa = net.p[a], pb = net.p[b]; _tmp.subVectors(pb, pa); const dl = _tmp.length() || 1, diff = (dl - L) / dl;
+      if (a < NET.cols) pb.addScaledVector(_tmp, -diff); else { pa.addScaledVector(_tmp, 0.5 * diff); pb.addScaledVector(_tmp, -0.5 * diff); }
+    }
+    for (let i = NET.cols; i < net.p.length; i++) {
+      const p = net.p[i]; _tmp.subVectors(p, ball); const dl = _tmp.length(), m = BALL_R + 0.005;
+      if (dl < m) p.addScaledVector(_tmp, (m - dl) / (dl || 1));
+    }
+  }
+  // ponytail
+  const a = tailAnchor(pose);
+  tail.p[0].copy(a); tail.q[0].copy(a);
+  for (let i = 1; i < tail.p.length; i++) {
+    const p = tail.p[i], q = tail.q[i]; _tmp.copy(p).sub(q).multiplyScalar(0.94); q.copy(p); p.add(_tmp); p.y += g;
+  }
+  for (let it = 0; it < 4; it++) {
+    for (let i = 1; i < tail.p.length; i++) {
+      const pa = tail.p[i - 1], pb = tail.p[i]; _tmp.subVectors(pb, pa); const dl = _tmp.length() || 1, diff = (dl - 0.052) / dl;
+      if (i === 1) pb.addScaledVector(_tmp, -diff); else { pa.addScaledVector(_tmp, 0.5 * diff); pb.addScaledVector(_tmp, -0.5 * diff); }
+    }
+    for (let i = 1; i < tail.p.length; i++) {
+      for (const [c, r] of [[pose.headC, 0.112], [pose.neckBase.clone().addScaledVector(AX_Z.clone().applyQuaternion(pose.Qt), -0.04), 0.11]]) {
+        _tmp.subVectors(tail.p[i], c); const dl = _tmp.length(); if (dl < r) tail.p[i].addScaledVector(_tmp, (r - dl) / (dl || 1));
+      }
+    }
+  }
+  simT += SIM_DT;
+}
+function simTo(t) {
+  if (t < simT - 1e-6 || simT === -Infinity) simReset();
+  if (simT < 0) simT = 0;
+  let n = 0;
+  while (simT + SIM_DT <= t + 1e-9 && n < 4000) { simStep(simT + SIM_DT, computePose(simT + SIM_DT)); n++; }
+}
+const netMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0034, 0.0034, 1, 6).translate(0, 0.5, 0),
+  new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), NET.rows * NET.cols * 2);
+netMesh.castShadow = true; scene.add(netMesh);
+const knotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.006, 6, 5), netMesh.material, (NET.rows + 1) * NET.cols); scene.add(knotMesh);
+function drawNet() {
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = V(), dir = V();
+  net.edges.forEach(([a, b], i) => {
+    dir.subVectors(net.p[b], net.p[a]); const L = dir.length(); q.setFromUnitVectors(UP, dir.multiplyScalar(1 / L)); s.set(1, L, 1);
+    m.compose(net.p[a], q, s); netMesh.setMatrixAt(i, m);
+  });
+  net.p.forEach((p, i) => { m.makeTranslation(p.x, p.y, p.z); knotMesh.setMatrixAt(i, m); });
+  netMesh.instanceMatrix.needsUpdate = true; knotMesh.instanceMatrix.needsUpdate = true;
+  netMesh.computeBoundingSphere(); knotMesh.computeBoundingSphere();
+}
+
+// ---------------------------------------------------------------- apply pose
+const _hq = new THREE.Quaternion();
+function applyPose(P, ballQ) {
+  body.pelvis.position.copy(P.P); body.pelvis.quaternion.copy(P.Qp);
+  body.torso.position.copy(P.P); body.torso.quaternion.copy(P.Qt);
+  orient(body.neck, P.headC.clone().addScaledVector(UP.clone().applyQuaternion(P.Qh), -0.06), P.neckBase, AX_Z.clone().applyQuaternion(P.Qt));
+  body.neck.scale.y = Math.max(0.05, body.neck.position.distanceTo(P.neckBase) + 0.02);
+  body.head.position.copy(P.headC); body.head.quaternion.copy(P.Qh);
+  for (const [side, hip, knee, a, sg] of [['L', P.hipL, P.kneeL, P.aL, 1], ['R', P.hipR, P.kneeR, P.aR, -1]]) {
+    const b = body[side], pole = P.Fp.clone().addScaledVector(P.Lp, sg * 0.12);
+    orient(b.thigh, hip, knee.mid, pole); orient(b.shin, knee.mid, knee.end, pole); b.knee.position.copy(knee.mid);
+    const fF = a.F.clone().multiplyScalar(Math.cos(a.p)).addScaledVector(UP, -Math.sin(a.p)), fU = a.F.clone().multiplyScalar(Math.sin(a.p)).addScaledVector(UP, Math.cos(a.p));
+    setBasis(b.foot, knee.end, V().crossVectors(fU, fF), fU, fF);
+  }
+  for (const [side, S, arm, Wt, out, inward] of [['R', P.SR, P.armR, P.wR, P.Rb, P.Lb], ['L', P.SL, P.armL, P.wL, P.Lb, P.Rb]]) {
+    const b = body[side], pole = arm.mid.clone().sub(S.clone().lerp(arm.end, 0.5)).normalize();
+    orient(b.ua, S, arm.mid, pole); orient(b.fa, arm.mid, arm.end, pole); b.elbow.position.copy(arm.mid); b.cap.position.copy(S);
+    const toBall = P.ball.clone().sub(arm.end), dist = toBall.length();
+    const hold = 1 - smooth((dist - (BALL_R + 0.06)) / 0.15);
+    const nDef = inward.clone().multiplyScalar(0.8).addScaledVector(P.Ft, -0.3).normalize();
+    const n = nDef.lerp(toBall.normalize(), hold).normalize();
+    const fd = arm.end.clone().sub(arm.mid).normalize();
+    let hd = fd.clone().addScaledVector(n, -fd.dot(n)); if (hd.lengthSq() < 1e-6) hd = fd; hd.normalize();
+    const hy = hd.clone().negate(), hz = n.clone().addScaledVector(hy, -n.dot(hy)).normalize();
+    setBasis(b.hand, arm.end, V().crossVectors(hy, hz), hy, hz);
+  }
+  for (let i = 0; i < body.tail.length; i++) orient(body.tail[i], tail.p[i], tail.p[i + 1], AX_Z);
+  body.ball.position.copy(P.ball); if (ballQ) body.ball.quaternion.copy(ballQ);
+}
+
+// ---------------------------------------------------------------- extras: ball path, glass ripple, labels, rim dimension
+const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPts);
+const pathLine = new THREE.Line(pathGeo, new THREE.LineDashedMaterial({ color: 0xffb27a, dashSize: 0.05, gapSize: 0.04, transparent: true, opacity: 0.75 }));
+pathLine.computeLineDistances(); scene.add(pathLine);
+const ripple = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.075, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+ripple.position.set(EV.hit.p.x, EV.hit.p.y, CT.boardZ + 0.004); scene.add(ripple);
+const dimGroup = new THREE.Group(); scene.add(dimGroup); dimGroup.visible = false;
+{
+  const mat = new THREE.LineBasicMaterial({ color: 0xffd36b });
+  const x = -1.25, z = CT.basketZ;
+  const pts = [V(x, 0.002, z), V(x, CT.rimY, z), V(x - 0.08, CT.rimY, z), V(-CT.rimR - 0.02, CT.rimY, z)];
+  dimGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+  for (let f = 1; f <= 10; f++) dimGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(x - 0.04, f * FT, z), V(x + 0.04, f * FT, z)]), mat));
+}
+const labelsEl = document.getElementById('labels');
+const LABELS = [
+  ['Baseline', V(-4.3, 0, -0.05)],
+  ['Sideline', V(CT.halfW + 0.03, 0, 9.5)],
+  ['Half-court line', V(-3.6, 0, CT.halfL)],
+  ['Center circle', V(CT.ccR * 0.71, 0, CT.halfL - CT.ccR * 0.71), '6 ft radius'],
+  ['Three-point line', V(CT.three * Math.cos(1.25), 0, CT.basketZ + CT.three * Math.sin(1.25)), '22 ft 1¾ in'],
+  ['Corner three', V(CT.corner, 0, 1.0), '22 ft'],
+  ['Lane', V(-1.5, 0, 3.6), '16 ft wide'],
+  ['Free-throw line', V(-1.0, 0, CT.ftZ), '15 ft from board'],
+  ['Free-throw circle', V(CT.ftR * 0.7, 0, CT.ftZ + CT.ftR * 0.71), '6 ft radius'],
+  ['Restricted area', V(-CT.raR * 0.5, 0, CT.basketZ + CT.raR * 0.87), '4 ft'],
+  ['Block', V(-CT.laneHalf - 0.1, 0, 7.5 * FT)],
+  ['Lane-space marks', V(CT.laneHalf + 0.08, 0, 14 * FT)],
+  ['Hash mark', V(CT.halfW - 0.5, 0, CT.hashZ), '28 ft'],
+  ['Rim', V(-1.25, CT.rimY, CT.basketZ), '10 ft · 3.05 m'],
+  ['Backboard', V(CT.boardW / 2 - 0.2, CT.boardBottom + CT.boardH, CT.boardZ), '72 × 42 in'],
+].map(([t, p, sub]) => { const el = document.createElement('div'); el.className = 'tag'; el.innerHTML = sub ? `${t} <i>${sub}</i>` : t; labelsEl.appendChild(el); return { el, p }; });
+function drawLabels() {
+  if (labelsEl.hidden) return;
+  const w = window.innerWidth, h = window.innerHeight, v = V();
+  for (const L of LABELS) {
+    v.copy(L.p).project(camera);
+    const vis = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+    L.el.style.display = vis ? '' : 'none';
+    if (vis) { L.el.style.left = `${(v.x * 0.5 + 0.5) * w}px`; L.el.style.top = `${(-v.y * 0.5 + 0.5) * h - 10}px`; }
+  }
+}
+
+// ---------------------------------------------------------------- cinematic camera (Bezier shots: zoom out, track, orbit-in, zoom out)
+const chest = t => pelvisRaw(t).add(V(0, 0.38, 0));
+const S0 = pelvisRaw(0), PB = pelvisRaw(3.10);
+const shots = [];
+{
+  const A0 = S0.clone().addScaledVector(d, 2.1).addScaledVector(RVEC, 1.25).setY(1.2);
+  const A3 = S0.clone().addScaledVector(d, -5.2).addScaledVector(RVEC, 2.4).setY(5.2);
+  const B3 = V(PB.x + 2.2, 1.5, PB.z + 0.9);
+  const C3 = V(-1.25, 2.1, 4.7);
+  const D3 = V(-6.2, 7.6, 12.8);
+  const bz = (p0, p1, p2, p3) => new THREE.CubicBezierCurve3(p0, p1, p2, p3);
+  const A2 = A3.clone().addScaledVector(RVEC, 1.4).addScaledVector(d, 1.6).add(V(0, -0.6, 0));
+  const B1 = A3.clone().multiplyScalar(2).sub(A2);
+  const B2 = B3.clone().add(V(1.8, 0.4, 2.6));
+  const C1 = B3.clone().add(V(-0.9, -0.2, -1.3));
+  const C2 = C3.clone().add(V(1.7, -0.2, 0.5));
+  const D1 = C3.clone().multiplyScalar(2).sub(C2);
+  shots.push({ t0: 0.0, t1: 1.25, c: bz(A0, A0.clone().addScaledVector(RVEC, 1.4).add(V(0, 0.5, 0)).addScaledVector(d, -0.6), A2, A3), ease: 'in' });
+  shots.push({ t0: 1.25, t1: 3.10, c: bz(A3, B1, B2, B3) });
+  shots.push({ t0: 3.10, t1: 4.60, c: bz(B3, C1, C2, C3) });
+  shots.push({ t0: 4.60, t1: T_END, c: bz(C3, D1, D3.clone().add(V(1.6, -2.2, -2.6)), D3), ease: 'out' });
+}
+const fovT = H1([{ t: 0, v: 36 }, { t: 1.25, v: 50 }, { t: 3.1, v: 46 }, { t: 3.6, v: 44 }, { t: 3.95, v: 40 }, { t: 4.6, v: 44 }, { t: T_END, v: 50 }]);
+const tgtW = H([{ t: 0, v: [0, 0.1, 0] }, { t: 1.25, v: [0.3, 0, 0.25] }, { t: 3.0, v: [0.3, 0, 0] }, { t: 3.45, v: [0.45, 0.2, 0] },
+  { t: 3.9, v: [0.35, 0.45, 0] }, { t: 4.5, v: [0.1, 0.5, 0] }, { t: 5.6, v: [0, 0.25, 0.55] }, { t: T_END, v: [0, 0.2, 0.65] }]);
+const RIM_T = V(0.15, 2.6, 1.8), COURT_T = V(0.3, 0.3, 5.2);
+function cinematic(t, ball) {
+  const sh = shots.find(s => t <= s.t1) || shots[shots.length - 1];
+  let u = clamp((t - sh.t0) / (sh.t1 - sh.t0), 0, 1);
+  if (sh.ease === 'in') u = smooth(u) * 0.5 + u * 0.5;
+  if (sh.ease === 'out') u = 1 - Math.pow(1 - u, 2.2);
+  camera.position.copy(sh.c.getPoint(u));
+  const [wr, wb, wc] = tgtW(t), wp = 1 - wr - wb - wc;
+  const tg = chest(t).multiplyScalar(wp).addScaledVector(RIM_T, wr).addScaledVector(ball, wb).addScaledVector(COURT_T, wc);
+  camera.lookAt(tg);
+  camera.fov = fovT(t); camera.updateProjectionMatrix();
+}
+
+// ---------------------------------------------------------------- captions, specs, stats
+const capEl = document.getElementById('caption');
+const CAPS = [
+  [0, 'Size-up at the right wing', 'Stationary right-hand dribble, eyes on the rim'],
+  [1.25, 'Attack the basket', 'Right-hand speed dribble, pushing the ball out in front'],
+  [T_GATHER - 0.02, 'Gather · step one', 'Ball picked up into both hands as the right foot lands'],
+  [3.06, 'Step two · plant the left foot', 'Long braking step turns speed into lift'],
+  [T_TO, 'Take-off', 'Right knee drives up, ball lifted with the right hand'],
+  [T_R - 0.03, 'Release at the top', `Ball leaves the fingertips at ${P0.y.toFixed(2)} m`],
+  [EV.hit.t - 0.02, 'Off the glass', 'Kisses the top corner of the square'],
+  [EV.rimPass - 0.02, 'Through the rim', 'Swish'],
+  [EV.floor1 + 0.1, 'Two points', 'Soft two-foot landing, ball rolls out into the lane'],
+];
+let capIdx = -1;
+function updateCaption(t) {
+  let i = 0; while (i < CAPS.length - 1 && t >= CAPS[i + 1][0]) i++;
+  if (i !== capIdx) { capIdx = i; capEl.innerHTML = `${CAPS[i][1]}<small>${CAPS[i][2]}</small>`; }
+}
+const takeoffFoot = W(0, 0.08, 0), basketFloor = V(0, 0, CT.basketZ);
+const specRows = [
+  ['Player height', `5′9″ · ${HEIGHT.toFixed(2)} m`],
+  ['Vertical jump (hip rise)', `${RISE.toFixed(2)} m · ${(RISE / IN).toFixed(0)} in`],
+  ['Air time', `${(T_LAND - T_TO).toFixed(2)} s`],
+  ['Take-off spot to basket', `${takeoffFoot.distanceTo(basketFloor).toFixed(2)} m`],
+  ['Release height (ball centre)', `${P0.y.toFixed(2)} m`],
+  ['Release speed', `${V0.length().toFixed(2)} m/s`],
+  ['Release angle', `${(Math.atan2(V0.y, Math.hypot(V0.x, V0.z)) / D2R).toFixed(0)}°`],
+  ['Contact on glass', `${(EV.hit.p.y).toFixed(2)} m · top corner`],
+  ['Rim clearance', `${(EV.minRimGap * 100).toFixed(0)} cm`],
+];
+document.getElementById('specMove').innerHTML = specRows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+const stBall = document.getElementById('stBall'), stHip = document.getElementById('stHip'), stTime = document.getElementById('stTime');
+
+// ---------------------------------------------------------------- playback
+const state = { t: 0, playing: true, speed: 1, slow: true, cine: true };
+const scrub = document.getElementById('scrub'), clockEl = document.getElementById('clock');
+const btnPlay = document.getElementById('btnPlay'), ico = document.getElementById('icoPlay');
+const ICON = { pause: 'M6 5h4v14H6zM14 5h4v14h-4z', play: 'M7 4.5v15l12-7.5z', replay: 'M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z' };
+function setIcon() {
+  const done = state.t >= T_END - 1e-6;
+  ico.innerHTML = `<path d="${state.playing ? ICON.pause : done ? ICON.replay : ICON.play}"/>`;
+  btnPlay.setAttribute('aria-label', state.playing ? 'Pause' : done ? 'Replay' : 'Play');
+}
+btnPlay.addEventListener('click', () => {
+  if (state.t >= T_END - 1e-6) state.t = 0;
+  state.playing = !state.playing; setIcon();
+});
+scrub.addEventListener('input', () => { state.t = scrub.value / 1000 * T_END; state.playing = false; setIcon(); });
+document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => {
+  state.speed = +b.dataset.speed; document.querySelectorAll('[data-speed]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+}));
+const toggle = (id, fn) => { const b = document.getElementById(id); b.addEventListener('click', () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); fn(on); }); };
+toggle('tgSlow', on => state.slow = on);
+toggle('tgPath', on => pathLine.visible = on);
+toggle('tgLabels', on => { labelsEl.hidden = !on; dimGroup.visible = on; });
+toggle('btnSpecs', on => document.getElementById('specs').hidden = !on);
+toggle('btnCam', on => {
+  state.cine = !on; controls.enabled = on;
+  if (on) { controls.target.copy(V(0.3, 1.4, 3.0)); camera.fov = 45; camera.updateProjectionMatrix(); controls.update(); }
+});
+window.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); btnPlay.click(); } });
+function rate(t) {
+  if (!state.slow) return 1;
+  const a = 3.15, b = 4.65;
+  return lerp(1, 0.35, smooth((t - a + 0.15) / 0.15) * (1 - smooth((t - b) / 0.2)));
+}
+let autoLabels = false;
+const ballQ = new THREE.Quaternion();
+function renderAt(t) {
+  simTo(t);
+  const pose = computePose(t);
+  ballAt(t, ballQ);
+  applyPose(pose, ballQ);
+  drawNet();
+  const iP = Math.floor(clamp((t - T_R) * SAMPLE_HZ, 0, pathPts.length));
+  pathGeo.setDrawRange(0, iP);
+  const rt = t - EV.hit.t; ripple.material.opacity = rt > 0 && rt < 0.45 ? 0.9 * (1 - rt / 0.45) : 0; ripple.scale.setScalar(1 + Math.max(0, rt) * 6);
+  if (state.cine) cinematic(t, pose.ball); else if (controls.enabled) controls.update();
+  updateCaption(t);
+  stBall.textContent = `${pose.ball.y.toFixed(2)} m`;
+  const hr = Math.max(0, pose.P.y - Y_TO);
+  stHip.textContent = t > T_TO && t < T_LAND ? `${hr.toFixed(2)} m` : '–';
+  stTime.textContent = `${t.toFixed(2)} s`;
+  renderer.render(scene, camera);
+  drawLabels();
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state.playing) {
+    state.t = Math.min(T_END, state.t + dt * state.speed * rate(state.t));
+    if (state.t >= T_END) {
+      state.playing = false; setIcon();
+      if (!autoLabels) { autoLabels = true; const b = document.getElementById('tgLabels'); if (b.getAttribute('aria-pressed') !== 'true') b.click(); }
+    }
+    scrub.value = String(Math.round(state.t / T_END * 1000));
+  }
+  clockEl.textContent = `${state.t.toFixed(2)} s`;
+  renderAt(state.t);
+  requestAnimationFrame(frame);
+}
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+
+window.__lay = {
+  plan: { B_PT, C_PT, P0, V0, PELVIS_R, d, T_TO, T_R, T_LAND, T_GATHER, EV, TAU, ORIGIN, U_LAND },
+  pelvisRaw, computePose, ballAt, camera, state,
+  render(t, opts = {}) { state.playing = false; state.t = t; if (opts.labels !== undefined) { labelsEl.hidden = !opts.labels; dimGroup.visible = opts.labels; } renderAt(t); },
+  clearance() {
+    const out = []; for (let t = T_R; t < T_END; t += 0.02) {
+      const p = computePose(t), b = p.ball; let m = 9, who = '';
+      const pts = { pelvis: p.P, chest: p.P.clone().add(V(0, 0.35, 0)), head: p.headC, kneeL: p.kneeL.mid, kneeR: p.kneeR.mid, wR: p.wR, wL: p.wL, ankL: p.aL.pos, ankR: p.aR.pos };
+      for (const k in pts) { const dd = pts[k].distanceTo(b); if (dd < m) { m = dd; who = k; } }
+      out.push([+t.toFixed(2), +m.toFixed(3), who]);
+    }
+    return out.sort((a, b) => a[1] - b[1]).slice(0, 8);
+  },
+  standingHeight() { return LEG.ankleH + LEG.thigh + LEG.shin + SPINE + 0.015 + HEAD_UP + 0.106; },
+};
+setIcon();
+if (params.has('capture')) { window.__ready = true; } else requestAnimationFrame(frame);
+</script>
+
+</html>
